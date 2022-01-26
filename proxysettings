@@ -1,0 +1,37 @@
+
+# Azure Stack HCI Proxy Settings
+# https://docs.microsoft.com/en-us/azure-stack/hci/concepts/firewall-requirements#set-up-a-proxy-server
+Import-Module WinInetProxy
+Set-WinInetProxy -ProxySettingsPerUser 0 -ProxyServer proxy.muc:8080 -ProxyBypass "127.0.0.0;localhost;*.muc;*.corp.net;*.local"
+icm azs-node01 {Set-WinInetProxy -ProxySettingsPerUser 0 -ProxyServer proxy.muc:8080 -ProxyBypass "127.0.0.0;localhost;*.muc;*.corp.net;*.local"}
+
+
+# NETSH should not be used for Register-AzStackHCI - but here is how we used it
+netsh winhttp set proxy "proxy.muc:8080" "127.0.0.0;localhost;*.muc;*.corp.net;*.local"
+icm azs-node01 {netsh winhttp set proxy "proxy.muc:8080" "127.0.0.0;localhost;*.muc;*.corp.net;*.local"}
+
+# TEST THE CONNECTION and DOWNLOAD THE AZSTACKHCI PS MODULES
+Import-Module Az.Account
+Import-Module Az.Resources
+invoke-webrequest https://www.powershellgallery.com/packages/Az.StackHCI/1.0.0
+
+###########################################################################################################################
+
+# Azure Arc Proxy Settings
+# https://docs.microsoft.com/en-us/azure/azure-arc/servers/manage-agent#windows-environment-variables  
+
+# PRE-CONFIGURED PROXY ENV - will be needed to allow the Register-AzStackHCI PowerShell script to run, which includes setup of Arc Agents on Nodes
+Set-AzureADApplicationwinrm set winrm/config/client '@{TrustedHosts="172.30.2.224,172.30.2.225,172.30.2.226"}’
+icm azs-node01 -ScriptBlock {[Environment]::SetEnvironmentVariable("https_proxy", "http://proxy.muc:8080", "Machine");
+$env:https_proxy = [System.Environment]::GetEnvironmentVariable("https_proxy","Machine");
+Restart-Service -Name himds;}
+
+
+# NEW STYLE if ENV is not needed. Can be used with latest Arc for Server Agent if installed separately. 
+azcmagent config set proxy.url "http://proxy.muc:8080"
+azcmagent config get proxy.url
+azcmagent config clear proxy.url
+
+
+
+
